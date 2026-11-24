@@ -1,0 +1,2 @@
+import {readFileSync,writeFileSync,existsSync} from 'node:fs';import {randomBytes} from 'node:crypto';
+const target=new URL('../backend/.env',import.meta.url);if(!existsSync(target)){const template=readFileSync(new URL('../backend/.env.example',import.meta.url),'utf8');writeFileSync(target,template.replace('replace-with-a-random-secret-at-least-32-characters',randomBytes(48).toString('hex')),{mode:0o600});console.log('Created backend/.env with random JWT secret. Set MONGODB_URI if using Atlas.');}else console.log('Existing backend/.env retained.');
