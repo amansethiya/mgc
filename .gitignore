@@ -13,6 +13,7 @@ ml-service/dataset/*
 !ml-service/dataset/.gitkeep
 ml-service/models/*
 !ml-service/models/.gitkeep
+!ml-service/models/genre_model.joblib
 ml-service/evaluation/*
 !ml-service/evaluation/.gitkeep
 .DS_Store
