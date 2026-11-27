@@ -657,7 +657,11 @@ footer {
 }
 
 .empty svg {
-    color: #ffffff
+    color: var(--accent)
+}
+
+.empty .button svg {
+    color: black
 }
 
 .empty h3 {
