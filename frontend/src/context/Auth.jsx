@@ -1,4 +1,44 @@
-import {createContext,useContext,useEffect,useState} from 'react';import {request,api,message} from '../services/api';
-const Auth=createContext(null);
-export function AuthProvider({children}){const [user,setUser]=useState(null),[loading,setLoading]=useState(true),[error,setError]=useState('');useEffect(()=>{let active=true;request('get','/auth/me').then(u=>active&&setUser(u)).catch(e=>{if(active&&e.response?.status!==401)setError(message(e));}).finally(()=>active&&setLoading(false));const id=api.interceptors.response.use(r=>r,e=>{if(e.response?.status===401)setUser(null);return Promise.reject(e);});return()=>{active=false;api.interceptors.response.eject(id);};},[]);async function authenticate(mode,body){const u=await request('post',`/auth/${mode}`,body);setUser(u);setError('');return u;}async function logout(){await request('post','/auth/logout');setUser(null);}return <Auth.Provider value={{user,loading,error,authenticate,logout}}>{children}</Auth.Provider>}
-export const useAuth=()=>useContext(Auth);
+import { createContext, useContext, useEffect, useState } from "react";
+import { request, api, message } from "../services/api";
+const Auth = createContext(null);
+export function AuthProvider({ children }) {
+  const [user, setUser] = useState(null),
+    [loading, setLoading] = useState(true),
+    [error, setError] = useState("");
+  useEffect(() => {
+    let active = true;
+    request("get", "/auth/me")
+      .then((u) => active && setUser(u))
+      .catch((e) => {
+        if (active && e.response?.status !== 401) setError(message(e));
+      })
+      .finally(() => active && setLoading(false));
+    const id = api.interceptors.response.use(
+      (r) => r,
+      (e) => {
+        if (e.response?.status === 401) setUser(null);
+        return Promise.reject(e);
+      },
+    );
+    return () => {
+      active = false;
+      api.interceptors.response.eject(id);
+    };
+  }, []);
+  async function authenticate(mode, body) {
+    const u = await request("post", `/auth/${mode}`, body);
+    setUser(u);
+    setError("");
+    return u;
+  }
+  async function logout() {
+    await request("post", "/auth/logout");
+    setUser(null);
+  }
+  return (
+    <Auth.Provider value={{ user, loading, error, authenticate, logout }}>
+      {children}
+    </Auth.Provider>
+  );
+}
+export const useAuth = () => useContext(Auth);

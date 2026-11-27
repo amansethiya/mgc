@@ -1,4 +1,59 @@
-import React from 'react';import {createRoot} from 'react-dom/client';import {BrowserRouter,Routes,Route,Navigate,Outlet} from 'react-router-dom';import {AuthProvider,useAuth} from './context/Auth';import {Home,AuthPage} from './pages/Public';import {Dashboard,Classify,History,Detail,Model} from './pages/Workspace';import {Shell,Loading,ErrorNotice} from './components/UI';import './index.css';
-function Protected(){const {user,loading,error}=useAuth();if(loading)return <Loading/>;if(!user&&error)return <div className="panel"><ErrorNotice text={error}/><button className="button secondary" onClick={()=>window.location.reload()}>Retry</button></div>;return user?<Outlet/>:<Navigate to="/login" replace/>}
-function App(){return <Routes><Route path="/" element={<Home/>}/><Route path="/login" element={<AuthPage key="login"/>}/><Route path="/register" element={<AuthPage key="register" register/>}/><Route element={<Protected/>}><Route element={<Shell/>}><Route path="/dashboard" element={<Dashboard/>}/><Route path="/classify" element={<Classify/>}/><Route path="/history" element={<History/>}/><Route path="/history/:id" element={<Detail/>}/><Route path="/model" element={<Model/>}/></Route></Route><Route path="*" element={<Navigate to="/" replace/>}/></Routes>}
-createRoot(document.getElementById('root')).render(<React.StrictMode><BrowserRouter><AuthProvider><App/></AuthProvider></BrowserRouter></React.StrictMode>);
+import React from "react";
+import { createRoot } from "react-dom/client";
+import {
+  BrowserRouter,
+  Routes,
+  Route,
+  Navigate,
+  Outlet,
+} from "react-router-dom";
+import { AuthProvider, useAuth } from "./context/Auth";
+import { Home, AuthPage } from "./pages/Public";
+import { Dashboard, Classify, History, Detail, Model } from "./pages/Workspace";
+import { Shell, Loading, ErrorNotice } from "./components/UI";
+import "./index.css";
+function Protected() {
+  const { user, loading, error } = useAuth();
+  if (loading) return <Loading />;
+  if (!user && error)
+    return (
+      <div className="panel">
+        <ErrorNotice text={error} />
+        <button
+          className="button secondary"
+          onClick={() => window.location.reload()}
+        >
+          Retry
+        </button>
+      </div>
+    );
+  return user ? <Outlet /> : <Navigate to="/login" replace />;
+}
+function App() {
+  return (
+    <Routes>
+      <Route path="/" element={<Home />} />
+      <Route path="/login" element={<AuthPage key="login" />} />
+      <Route path="/register" element={<AuthPage key="register" register />} />
+      <Route element={<Protected />}>
+        <Route element={<Shell />}>
+          <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/classify" element={<Classify />} />
+          <Route path="/history" element={<History />} />
+          <Route path="/history/:id" element={<Detail />} />
+          <Route path="/model" element={<Model />} />
+        </Route>
+      </Route>
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
+createRoot(document.getElementById("root")).render(
+  <React.StrictMode>
+    <BrowserRouter>
+      <AuthProvider>
+        <App />
+      </AuthProvider>
+    </BrowserRouter>
+  </React.StrictMode>,
+);

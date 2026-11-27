@@ -1,9 +1,482 @@
-import {useEffect,useRef,useState} from 'react';import {Link,useParams} from 'react-router-dom';import {UploadCloud,FileAudio,ArrowUpRight,AudioLines,Music2,Activity,Trash2,BrainCircuit,RefreshCw,X,ArrowLeft,ArrowRight} from 'lucide-react';import {ResponsiveContainer,BarChart,Bar,XAxis,YAxis,Tooltip} from 'recharts';import {request,message,pct,genreName,date,duration} from '../services/api';import {PageTitle,ErrorNotice,Loading,Empty} from '../components/UI';import {Results} from '../components/Results';
-function useFetch(url){const [data,setData]=useState(null),[error,setError]=useState(''),[key,setKey]=useState(0);useEffect(()=>{let live=true;setData(null);setError('');request('get',url).then(d=>live&&setData(d)).catch(e=>live&&setError(message(e)));return()=>{live=false}},[url,key]);return {data,error,reload:()=>setKey(k=>k+1)};}
-function FetchError({error,reload}){return <><ErrorNotice text={error}/><button className="button secondary" onClick={reload}><RefreshCw size={16}/> Retry</button></>}
-function TrackList({items,onDelete}){return <div className="track-list">{items.map(p=><div className="track-row" key={p._id}><div className="file-icon"><FileAudio size={21}/></div><Link className="track-name" to={`/history/${p._id}`}><strong>{p.originalFileName}</strong><small>{date(p.createdAt)} · {duration(p.audioDuration)}</small></Link><span className="genre-pill">{genreName(p.predictedGenre)}</span><span className="track-score">{pct(p.confidenceScore)}</span>{onDelete&&<button className="icon-btn" onClick={()=>onDelete(p)} aria-label={`Delete ${p.originalFileName}`}><Trash2 size={17}/></button>}<Link className="icon-btn" to={`/history/${p._id}`} aria-label={`View ${p.originalFileName}`}><ArrowUpRight size={18}/></Link></div>)}</div>}
-export function Dashboard(){const {data,error,reload}=useFetch('/dashboard/stats');return <><PageTitle eyebrow="WORKSPACE / OVERVIEW" title="Your music, decoded." subtitle="A summary of your personal classification activity." action={<Link to="/classify" className="button primary">New analysis <ArrowUpRight size={17}/></Link>}/>{error?<FetchError {...{error,reload}}/>:!data?<Loading/>:<><div className="stat-grid">{[[AudioLines,'Analyzed tracks',data.total],[Music2,'Top genre',genreName(data.mostFrequentGenre)],[Activity,'Average confidence',pct(data.averageConfidence)]].map(([Icon,title,value])=><div className="panel stat" key={title}><Icon size={22}/><span>{title}</span><strong>{value}</strong></div>)}</div><div className="panel"><h3>Genre distribution</h3><p className="muted">Your saved predictions by genre</p>{data.total===0?<Empty/>:<ResponsiveContainer width="100%" height={280}><BarChart data={data.distribution.map(x=>({...x,genre:genreName(x.genre)}))}><XAxis dataKey="genre" stroke="#87939f"/><YAxis allowDecimals={false} stroke="#87939f"/><Tooltip contentStyle={{background:'#18202a',border:'1px solid #39424d'}}/><Bar dataKey="count" fill="#b5f28d" radius={[5,5,0,0]}/></BarChart></ResponsiveContainer>}</div><div className="panel"><div className="section-head"><h3>Recent analyses</h3><Link to="/history" className="accent">View all</Link></div>{data.recent.length?<TrackList items={data.recent}/>:<p className="muted">No saved predictions yet.</p>}</div></>}</>}
-export function Classify(){const {data:model,error:modelError,reload}=useFetch('/model/info');const [file,setFile]=useState(null),[url,setUrl]=useState(''),[error,setError]=useState(''),[busy,setBusy]=useState(false),[result,setResult]=useState(null),[drag,setDrag]=useState(false);const input=useRef();useEffect(()=>{if(!file){setUrl('');return;}const u=URL.createObjectURL(file);setUrl(u);return()=>URL.revokeObjectURL(u)},[file]);function select(f){if(!f)return;setError('');setResult(null);if(!/\.(wav|mp3)$/i.test(f.name)||f.size>25*1024*1024||!f.size){setError('Choose a nonempty MP3 or WAV file up to 25 MB.');setFile(null);return;}setFile(f);}async function analyze(){if(!file||busy)return;setBusy(true);setError('');setResult(null);try{const form=new FormData();form.append('file',file);setResult(await request('post','/predictions',form));}catch(e){setError(message(e));}finally{setBusy(false);}}return <><PageTitle eyebrow="WORKSPACE / CLASSIFIER" title="Analyze your music." subtitle="Discover the genre behind an audio track using our trained model."/>{modelError?<FetchError error={modelError} reload={reload}/>:model&&!model.ready?<div className="notice"><BrainCircuit size={20}/><span>Model not trained yet. Run the GTZAN training script, restart FastAPI, then <button className="accent" onClick={reload}>refresh model status</button>.</span></div>:model?<div className="notice ready"><span className="dot"/> Model ready · {model.modelVersion}</div>:<Loading text="Checking model status…"/>}<div className="panel"><div className="section-head"><h3>Audio input</h3><span className="muted tiny">STEP 01</span></div><div className={`drop ${drag?'dragging':''}`} onDragOver={e=>{e.preventDefault();if(!busy)setDrag(true)}} onDragLeave={()=>setDrag(false)} onDrop={e=>{e.preventDefault();setDrag(false);if(!busy)select(e.dataTransfer.files[0])}}><UploadCloud size={38}/><h3>Drag & drop your audio</h3><p>MP3 or WAV · Maximum 25 MB · Minimum 5 seconds</p><input ref={input} type="file" accept=".wav,.mp3,audio/wav,audio/mpeg" className="sr-only" onChange={e=>{select(e.target.files[0]);e.target.value=''}} disabled={busy}/><button className="button secondary" disabled={busy} onClick={()=>input.current.click()}>Browse files</button></div>{file&&<div className="selected"><div className="section-head"><span className="file-label"><FileAudio size={22}/><span>{file.name}<small>{(file.size/1024/1024).toFixed(2)} MB</small></span></span><button className="icon-btn" disabled={busy} aria-label="Remove file" onClick={()=>{setFile(null);setResult(null)}}><X/></button></div>{url&&<audio controls src={url} preload="metadata"/>}</div>}<ErrorNotice text={error}/><div className="section-head analyze-footer"><span className="muted tiny">Analyzes the first 30 seconds. Saved to your private history.</span><button className="button primary" disabled={!file||busy||!model?.ready} onClick={analyze}>{busy?'Analyzing…':'Classify audio'} <AudioLines size={19}/></button></div>{busy&&<Loading text="Extracting features and predicting genre…"/>}</div>{result&&<Results p={result}/>}</>}
-export function History(){const [page,setPage]=useState(1),[err,setErr]=useState('');const {data,error,reload}=useFetch(`/predictions?page=${page}`);async function remove(p){if(!window.confirm(`Delete ${p.originalFileName} and its stored audio?`))return;try{await request('delete',`/predictions/${p._id}`);if(data.items.length===1&&page>1)setPage(page-1);else reload();}catch(e){setErr(message(e));}}return <><PageTitle eyebrow="WORKSPACE / HISTORY" title="Prediction history" subtitle="Revisit, play or delete your saved analyses."/><ErrorNotice text={err}/><div className="panel">{error?<FetchError {...{error,reload}}/>:!data?<Loading/>:data.total===0?<Empty/>:<><div className="section-head"><h3>{data.total} saved analyses</h3><span className="muted">Newest first</span></div><TrackList items={data.items} onDelete={remove}/><div className="pagination"><button className="button secondary" disabled={page<=1} onClick={()=>setPage(page-1)}><ArrowLeft size={16}/> Previous</button><span>Page {page} of {Math.ceil(data.total/data.limit)}</span><button className="button secondary" disabled={page*data.limit>=data.total} onClick={()=>setPage(page+1)}>Next <ArrowRight size={16}/></button></div></>}</div></>}
-export function Detail(){const {id}=useParams();const {data,error,reload}=useFetch(`/predictions/${id}`);return <><Link className="back" to="/history"><ArrowLeft size={17}/> Back to history</Link><PageTitle eyebrow="HISTORY / ANALYSIS" title="Track details" subtitle="Original audio and saved prediction."/>{error?<FetchError {...{error,reload}}/>:!data?<Loading/>:<><div className="panel"><h3>{data.originalFileName}</h3><audio controls preload="metadata" src={`/api/v1/predictions/${id}/audio`}/></div><Results p={data}/></>}</>}
-export function Model(){const {data,error,reload}=useFetch('/model/info');return <><PageTitle eyebrow="WORKSPACE / MODEL" title="Inside the model" subtitle="Understand the classification pipeline and current artifact."/>{error?<FetchError {...{error,reload}}/>:!data?<Loading/>:<><div className="panel"><div className="section-head"><h3>Model status</h3><button className="button secondary" onClick={reload}><RefreshCw size={15}/> Refresh</button></div><p className={data.ready?'accent':'muted'}>{data.ready?`Ready · ${data.modelVersion}`:'Not trained — train on GTZAN and restart FastAPI.'}</p><p className="muted">Validation and test metrics are generated by the training script, not inferred from prediction confidence.</p></div><div className="panel"><h3>Preprocessing configuration</h3><div className="prob-table">{Object.entries(data.preprocessing).map(([k,v])=><div key={k}>{k.replaceAll('_',' ')}<strong>{v}</strong></div>)}</div></div><div className="panel"><h3>Supported genres</h3><div className="genre-strip">{data.genres.map(g=><span key={g}>{genreName(g)}</span>)}</div></div></>}</>}
+import { useEffect, useRef, useState } from "react";
+import { Link, useParams } from "react-router-dom";
+import {
+  UploadCloud,
+  FileAudio,
+  ArrowUpRight,
+  AudioLines,
+  Music2,
+  Activity,
+  Trash2,
+  BrainCircuit,
+  RefreshCw,
+  X,
+  ArrowLeft,
+  ArrowRight,
+} from "lucide-react";
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+} from "recharts";
+import {
+  request,
+  message,
+  pct,
+  genreName,
+  date,
+  duration,
+} from "../services/api";
+import { PageTitle, ErrorNotice, Loading, Empty } from "../components/UI";
+import { Results } from "../components/Results";
+function useFetch(url) {
+  const [data, setData] = useState(null),
+    [error, setError] = useState(""),
+    [key, setKey] = useState(0);
+  useEffect(() => {
+    let live = true;
+    setData(null);
+    setError("");
+    request("get", url)
+      .then((d) => live && setData(d))
+      .catch((e) => live && setError(message(e)));
+    return () => {
+      live = false;
+    };
+  }, [url, key]);
+  return { data, error, reload: () => setKey((k) => k + 1) };
+}
+function FetchError({ error, reload }) {
+  return (
+    <>
+      <ErrorNotice text={error} />
+      <button className="button secondary" onClick={reload}>
+        <RefreshCw size={16} /> Retry
+      </button>
+    </>
+  );
+}
+function TrackList({ items, onDelete }) {
+  return (
+    <div className="track-list">
+      {items.map((p) => (
+        <div className="track-row" key={p._id}>
+          <div className="file-icon">
+            <FileAudio size={21} />
+          </div>
+          <Link className="track-name" to={`/history/${p._id}`}>
+            <strong>{p.originalFileName}</strong>
+            <small>
+              {date(p.createdAt)} · {duration(p.audioDuration)}
+            </small>
+          </Link>
+          <span className="genre-pill">{genreName(p.predictedGenre)}</span>
+          <span className="track-score">{pct(p.confidenceScore)}</span>
+          {onDelete && (
+            <button
+              className="icon-btn"
+              onClick={() => onDelete(p)}
+              aria-label={`Delete ${p.originalFileName}`}
+            >
+              <Trash2 size={17} />
+            </button>
+          )}
+          <Link
+            className="icon-btn"
+            to={`/history/${p._id}`}
+            aria-label={`View ${p.originalFileName}`}
+          >
+            <ArrowUpRight size={18} />
+          </Link>
+        </div>
+      ))}
+    </div>
+  );
+}
+export function Dashboard() {
+  const { data, error, reload } = useFetch("/dashboard/stats");
+  return (
+    <>
+      <PageTitle
+        eyebrow="WORKSPACE / OVERVIEW"
+        title="Your music, decoded."
+        subtitle="A summary of your personal classification activity."
+        action={
+          <Link to="/classify" className="button primary">
+            New analysis <ArrowUpRight size={17} />
+          </Link>
+        }
+      />
+      {error ? (
+        <FetchError {...{ error, reload }} />
+      ) : !data ? (
+        <Loading />
+      ) : (
+        <>
+          <div className="stat-grid">
+            {[
+              [AudioLines, "Analyzed tracks", data.total],
+              [Music2, "Top genre", genreName(data.mostFrequentGenre)],
+              [Activity, "Average confidence", pct(data.averageConfidence)],
+            ].map(([Icon, title, value]) => (
+              <div className="panel stat" key={title}>
+                <Icon size={22} />
+                <span>{title}</span>
+                <strong>{value}</strong>
+              </div>
+            ))}
+          </div>
+          <div className="panel">
+            <h3>Genre distribution</h3>
+            <p className="muted">Your saved predictions by genre</p>
+            {data.total === 0 ? (
+              <Empty />
+            ) : (
+              <ResponsiveContainer width="100%" height={280}>
+                <BarChart
+                  data={data.distribution.map((x) => ({
+                    ...x,
+                    genre: genreName(x.genre),
+                  }))}
+                >
+                  <XAxis dataKey="genre" stroke="#87939f" />
+                  <YAxis allowDecimals={false} stroke="#87939f" />
+                  <Tooltip
+                    contentStyle={{
+                      background: "#18202a",
+                      border: "1px solid #39424d",
+                    }}
+                  />
+                  <Bar dataKey="count" fill="#b5f28d" radius={[5, 5, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+          <div className="panel">
+            <div className="section-head">
+              <h3>Recent analyses</h3>
+              <Link to="/history" className="accent">
+                View all
+              </Link>
+            </div>
+            {data.recent.length ? (
+              <TrackList items={data.recent} />
+            ) : (
+              <p className="muted">No saved predictions yet.</p>
+            )}
+          </div>
+        </>
+      )}
+    </>
+  );
+}
+export function Classify() {
+  const { data: model, error: modelError, reload } = useFetch("/model/info");
+  const [file, setFile] = useState(null),
+    [url, setUrl] = useState(""),
+    [error, setError] = useState(""),
+    [busy, setBusy] = useState(false),
+    [result, setResult] = useState(null),
+    [drag, setDrag] = useState(false);
+  const input = useRef();
+  useEffect(() => {
+    if (!file) {
+      setUrl("");
+      return;
+    }
+    const u = URL.createObjectURL(file);
+    setUrl(u);
+    return () => URL.revokeObjectURL(u);
+  }, [file]);
+  function select(f) {
+    if (!f) return;
+    setError("");
+    setResult(null);
+    if (!/\.(wav|mp3)$/i.test(f.name) || f.size > 25 * 1024 * 1024 || !f.size) {
+      setError("Choose a nonempty MP3 or WAV file up to 25 MB.");
+      setFile(null);
+      return;
+    }
+    setFile(f);
+  }
+  async function analyze() {
+    if (!file || busy) return;
+    setBusy(true);
+    setError("");
+    setResult(null);
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      setResult(await request("post", "/predictions", form));
+    } catch (e) {
+      setError(message(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <>
+      <PageTitle
+        eyebrow="WORKSPACE / CLASSIFIER"
+        title="Analyze your music."
+        subtitle="Discover the genre behind an audio track using our trained model."
+      />
+      {modelError ? (
+        <FetchError error={modelError} reload={reload} />
+      ) : model && !model.ready ? (
+        <div className="notice">
+          <BrainCircuit size={20} />
+          <span>
+            Model not trained yet. Run the GTZAN training script, restart
+            FastAPI, then{" "}
+            <button className="accent" onClick={reload}>
+              refresh model status
+            </button>
+            .
+          </span>
+        </div>
+      ) : model ? (
+        <div className="notice ready">
+          <span className="dot" /> Model ready · {model.modelVersion}
+        </div>
+      ) : (
+        <Loading text="Checking model status…" />
+      )}
+      <div className="panel">
+        <div className="section-head">
+          <h3>Audio input</h3>
+          <span className="muted tiny">STEP 01</span>
+        </div>
+        <div
+          className={`drop ${drag ? "dragging" : ""}`}
+          onDragOver={(e) => {
+            e.preventDefault();
+            if (!busy) setDrag(true);
+          }}
+          onDragLeave={() => setDrag(false)}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDrag(false);
+            if (!busy) select(e.dataTransfer.files[0]);
+          }}
+        >
+          <UploadCloud size={38} />
+          <h3>Drag & drop your audio</h3>
+          <p>MP3 or WAV · Maximum 25 MB · Minimum 5 seconds</p>
+          <input
+            ref={input}
+            type="file"
+            accept=".wav,.mp3,audio/wav,audio/mpeg"
+            className="sr-only"
+            onChange={(e) => {
+              select(e.target.files[0]);
+              e.target.value = "";
+            }}
+            disabled={busy}
+          />
+          <button
+            className="button secondary"
+            disabled={busy}
+            onClick={() => input.current.click()}
+          >
+            Browse files
+          </button>
+        </div>
+        {file && (
+          <div className="selected">
+            <div className="section-head">
+              <span className="file-label">
+                <FileAudio size={22} />
+                <span>
+                  {file.name}
+                  <small>{(file.size / 1024 / 1024).toFixed(2)} MB</small>
+                </span>
+              </span>
+              <button
+                className="icon-btn"
+                disabled={busy}
+                aria-label="Remove file"
+                onClick={() => {
+                  setFile(null);
+                  setResult(null);
+                }}
+              >
+                <X />
+              </button>
+            </div>
+            {url && <audio controls src={url} preload="metadata" />}
+          </div>
+        )}
+        <ErrorNotice text={error} />
+        <div className="section-head analyze-footer">
+          <span className="muted tiny">
+            Analyzes the first 30 seconds. Saved to your private history.
+          </span>
+          <button
+            className="button primary"
+            disabled={!file || busy || !model?.ready}
+            onClick={analyze}
+          >
+            {busy ? "Analyzing…" : "Classify audio"} <AudioLines size={19} />
+          </button>
+        </div>
+        {busy && <Loading text="Extracting features and predicting genre…" />}
+      </div>
+      {result && <Results p={result} />}
+    </>
+  );
+}
+export function History() {
+  const [page, setPage] = useState(1),
+    [err, setErr] = useState("");
+  const { data, error, reload } = useFetch(`/predictions?page=${page}`);
+  async function remove(p) {
+    if (!window.confirm(`Delete ${p.originalFileName} and its stored audio?`))
+      return;
+    try {
+      await request("delete", `/predictions/${p._id}`);
+      if (data.items.length === 1 && page > 1) setPage(page - 1);
+      else reload();
+    } catch (e) {
+      setErr(message(e));
+    }
+  }
+  return (
+    <>
+      <PageTitle
+        eyebrow="WORKSPACE / HISTORY"
+        title="Prediction history"
+        subtitle="Revisit, play or delete your saved analyses."
+      />
+      <ErrorNotice text={err} />
+      <div className="panel">
+        {error ? (
+          <FetchError {...{ error, reload }} />
+        ) : !data ? (
+          <Loading />
+        ) : data.total === 0 ? (
+          <Empty />
+        ) : (
+          <>
+            <div className="section-head">
+              <h3>{data.total} saved analyses</h3>
+              <span className="muted">Newest first</span>
+            </div>
+            <TrackList items={data.items} onDelete={remove} />
+            <div className="pagination">
+              <button
+                className="button secondary"
+                disabled={page <= 1}
+                onClick={() => setPage(page - 1)}
+              >
+                <ArrowLeft size={16} /> Previous
+              </button>
+              <span>
+                Page {page} of {Math.ceil(data.total / data.limit)}
+              </span>
+              <button
+                className="button secondary"
+                disabled={page * data.limit >= data.total}
+                onClick={() => setPage(page + 1)}
+              >
+                Next <ArrowRight size={16} />
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+export function Detail() {
+  const { id } = useParams();
+  const { data, error, reload } = useFetch(`/predictions/${id}`);
+  return (
+    <>
+      <Link className="back" to="/history">
+        <ArrowLeft size={17} /> Back to history
+      </Link>
+      <PageTitle
+        eyebrow="HISTORY / ANALYSIS"
+        title="Track details"
+        subtitle="Original audio and saved prediction."
+      />
+      {error ? (
+        <FetchError {...{ error, reload }} />
+      ) : !data ? (
+        <Loading />
+      ) : (
+        <>
+          <div className="panel">
+            <h3>{data.originalFileName}</h3>
+            <audio
+              controls
+              preload="metadata"
+              src={`/api/v1/predictions/${id}/audio`}
+            />
+          </div>
+          <Results p={data} />
+        </>
+      )}
+    </>
+  );
+}
+export function Model() {
+  const { data, error, reload } = useFetch("/model/info");
+  return (
+    <>
+      <PageTitle
+        eyebrow="WORKSPACE / MODEL"
+        title="Inside the model"
+        subtitle="Understand the classification pipeline and current artifact."
+      />
+      {error ? (
+        <FetchError {...{ error, reload }} />
+      ) : !data ? (
+        <Loading />
+      ) : (
+        <>
+          <div className="panel">
+            <div className="section-head">
+              <h3>Model status</h3>
+              <button className="button secondary" onClick={reload}>
+                <RefreshCw size={15} /> Refresh
+              </button>
+            </div>
+            <p className={data.ready ? "accent" : "muted"}>
+              {data.ready
+                ? `Ready · ${data.modelVersion}`
+                : "Not trained — train on GTZAN and restart FastAPI."}
+            </p>
+            <p className="muted">
+              Validation and test metrics are generated by the training script,
+              not inferred from prediction confidence.
+            </p>
+          </div>
+          <div className="panel">
+            <h3>Preprocessing configuration</h3>
+            <div className="prob-table">
+              {Object.entries(data.preprocessing).map(([k, v]) => (
+                <div key={k}>
+                  {k.replaceAll("_", " ")}
+                  <strong>{v}</strong>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="panel">
+            <h3>Supported genres</h3>
+            <div className="genre-strip">
+              {data.genres.map((g) => (
+                <span key={g}>{genreName(g)}</span>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
+    </>
+  );
+}
