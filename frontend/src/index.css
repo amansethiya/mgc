@@ -657,7 +657,7 @@ footer {
 }
 
 .empty svg {
-    color: var(--accent)
+    color: #000000
 }
 
 .empty h3 {
@@ -727,7 +727,7 @@ audio {
 .icon-btn {
     padding: 7px;
     border-radius: 7px;
-    color: #a2afbc;
+    color: #000000;
     background: transparent;
     display: inline-flex;
     align-items: center;
